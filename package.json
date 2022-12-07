@@ -1,0 +1,19 @@
+{
+    "name": "@nodetf/proxy",
+    "version": "1.0.0",
+    "description": "Create a Proxy between a server/client",
+    "main": "lib/index.js",
+    "scripts": {
+        "test": "ts-node test.ts",
+        "prebuild": "npm run clean",
+        "build": "tsc --build",
+        "clean": "tsc --build --clean"
+    },
+    "author": "N1ghtTheF0x",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^18.11.11",
+        "ts-node": "latest",
+        "typescript": "latest"
+    }
+}
