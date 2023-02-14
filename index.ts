@@ -41,6 +41,7 @@ namespace NProxy
     {
         broadcast?: boolean
     }
+    export type DataHandler = (data: Buffer) => void
     /**
      * Creates a Proxy to `address`:`port` with the protocol `type`
      * @param type Type of Protocol: "tcp", "udp4" or "udp6"
@@ -94,6 +95,14 @@ namespace NProxy
          * Is the Proxy for udp?
          */
         abstract isUDP(): this is ProxyUDPServer
+        /**
+         * Handle client data with a function
+         */
+        onClientData?: DataHandler
+        /**
+         * Handle server data with a function
+         */
+        onServerData?: DataHandler
         constructor(readonly options: Options)
         {
 
@@ -122,12 +131,14 @@ class ProxyUDPServer extends NProxy.Server
         this.#pClient = createSocket(type,(data,rinfo) =>
         {
             this.serverData = data
+            if(this.onServerData) this.onServerData(data)
             this.printInfo()
             if(this.#clientInfo) this.#server.send(data,this.#clientInfo.port,this.#clientInfo.address)
         })
         this.#server = createSocket(type,(data,rinfo) =>
         {
             this.clientData = data
+            if(this.onClientData) this.onClientData(data)
             this.printInfo()
             this.#clientInfo = rinfo
             this.#pClient.send(data,this.options.port,this.options.address)
@@ -165,6 +176,7 @@ class ProxyTCPServer extends NProxy.Server
             socket.on("data",(data) =>
             {
                 this.clientData = data
+                if(this.onClientData) this.onClientData(data)
                 this.printInfo()
                 if(this.#pClient) this.#pClient.write(data)
             })
@@ -176,6 +188,7 @@ class ProxyTCPServer extends NProxy.Server
         proxyClient.on("data",(data) =>
         {
             this.serverData = data
+            if(this.onServerData) this.onServerData(data)
             this.printInfo()
             if(this.#client) this.#client.write(data)
         })
