@@ -12,31 +12,101 @@ import { createSocket, SocketType as UDPSocketType, Socket as UDPSocket, RemoteI
     ...
 */
 
+type ProxyMap = {
+    "udp4": ProxyUDPServer
+    "udp6": ProxyUDPServer
+    "tcp": ProxyTCPServer
+}
+type ProxyOptionMap = {
+    "udp4": NProxy.UDPOptions
+    "udp6": NProxy.UDPOptions
+    "tcp": NProxy.TCPOptions
+}
+
 namespace NProxy
 {
-    export function create(type: Type,address: string,port: number): Server
+    /**
+     * Base options for the proxy
+     */
+    export interface Options
     {
-        if(type == "tcp") return new ProxyTCPServer(address,port)
-        else return new ProxyUDPServer(type,address,port)
+        address: string
+        port: number
     }
+    export interface TCPOptions extends Options
+    {
+
+    }
+    export interface UDPOptions extends Options
+    {
+        broadcast?: boolean
+    }
+    /**
+     * Creates a Proxy to `address`:`port` with the protocol `type`
+     * @param type Type of Protocol: "tcp", "udp4" or "udp6"
+     * @param address Address to real Server
+     * @param port Port of real Server
+     * @returns Proxy
+     */
+    export function create<T extends Type>(type: T,options: ProxyOptionMap[T]): ProxyMap[T]
+    {
+        if(type == "tcp") return new ProxyTCPServer(options) as ProxyMap[T]
+        else return new ProxyUDPServer(type,options) as ProxyMap[T]
+    }
+    /**
+     * Protocol Type of the Proxy
+     */
     export type Type = UDPSocketType | "tcp"
+    /**
+     * The Proxy Server for sniffing data
+     */
     export abstract class Server
     {
+        /**
+         * The default Port of the Proxy Server
+         */
         static DEFAULT_PORT = 43434
+        /**
+         * The last data from the Client
+         */
         clientData?: Buffer
+        /**
+         * The last data from the Server
+         */
         serverData?: Buffer
+        /**
+         * The encoding to use for printing info into the console
+         */
+        encoding: BufferEncoding = "hex"
+        /**
+         * Should the Proxy print every data in a clean way?
+         */
+        printToConsole: boolean = true
+        /**
+         * Starts the proxy. Now you can connect to it!
+         */
         abstract listen(): void
+        /**
+         * Is the Proxy for tcp?
+         */
         abstract isTCP(): this is ProxyTCPServer
+        /**
+         * Is the Proxy for udp?
+         */
         abstract isUDP(): this is ProxyUDPServer
-        constructor(readonly address: string,readonly port: number)
+        constructor(readonly options: Options)
         {
 
         }
+        /**
+         * Prints data from the Server/Client in a pretty way
+         */
         printInfo()
         {
+            if(!this.printToConsole) return
             if(this.serverData || this.clientData) console.clear()
-            if(this.clientData) console.info(`[Client] ${this.clientData.length} bytes\n${this.clientData.toString("hex")}`)
-            if(this.serverData) console.info(`[Server] ${this.serverData.length} bytes\n${this.serverData.toString("hex")}`)
+            if(this.clientData) console.info(`[Client] ${this.clientData.length} bytes\n${this.clientData.toString(this.encoding)}`)
+            if(this.serverData) console.info(`[Server] ${this.serverData.length} bytes\n${this.serverData.toString(this.encoding)}`)
         }
     }
 }
@@ -46,9 +116,9 @@ class ProxyUDPServer extends NProxy.Server
     #clientInfo?: RemoteInfo
     #pClient: UDPSocket 
     #server: UDPSocket
-    constructor(readonly type: UDPSocketType,address: string,port: number)
+    constructor(readonly type: UDPSocketType,options: NProxy.UDPOptions)
     {
-        super(address,port)
+        super(options)
         this.#pClient = createSocket(type,(data,rinfo) =>
         {
             this.serverData = data
@@ -60,11 +130,12 @@ class ProxyUDPServer extends NProxy.Server
             this.clientData = data
             this.printInfo()
             this.#clientInfo = rinfo
-            this.#pClient.send(data,this.port,this.address)
+            this.#pClient.send(data,this.options.port,this.options.address)
         })
         this.#server.on("listening",() =>
         {
             console.info(`[Proxy] Listening for connections...`)
+            if(options.broadcast) this.#server.setBroadcast(options.broadcast)
         })
     }
     listen(): void 
@@ -84,9 +155,9 @@ class ProxyTCPServer extends NProxy.Server
     #client?: TCPSocket
     #pClient?: TCPSocket
     #server
-    constructor(address: string,port: number)
+    constructor(options: NProxy.TCPOptions)
     {
-        super(address,port)
+        super(options)
         this.#server = createServer((socket) =>
         {
             this.#client = socket
@@ -101,7 +172,7 @@ class ProxyTCPServer extends NProxy.Server
     }
     #clientConnect()
     {
-        const proxyClient = this.#pClient =  createConnection({host: this.address,port: this.port})
+        const proxyClient = this.#pClient =  createConnection(this.options)
         proxyClient.on("data",(data) =>
         {
             this.serverData = data
